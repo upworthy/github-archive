@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,12 +188,18 @@ func fileMD5(file string) md5sum {
 	return md5sum(fmt.Sprintf("%x", sum))
 }
 
+func randomSleep(max int) {
+	delay := time.Duration(rand.Intn(max))
+	time.Sleep(delay * time.Millisecond)
+}
+
 func cloneRepo(cmdDir, directory string, r Repo) error {
 	cmd := exec.Command("git", "clone", httpsRepoWithCredential(r.FullName, githubToken), directory)
 	cmd.Dir = cmdDir
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	randomSleep(50)
 	err := cmd.Run()
 	if err != nil {
 		return err
