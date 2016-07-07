@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
+	"crypto/md5"
 	"github.com/google/go-github/github"
 	"github.com/rlmcpherson/s3gof3r"
 )
@@ -25,24 +26,34 @@ var (
 	githubClient *github.Client
 	bucket       *s3gof3r.Bucket
 	date         string
+	githubToken  string
 )
 
 type Repo struct {
-	Date  string
-	Owner string
-	Name  string
-	URL   string
+	Date     string
+	Owner    string
+	Name     string
+	FullName string
+	URL      string
+}
+
+func mustGetEnv(key string) string {
+	s := os.Getenv(key)
+	if s == "" {
+		log.Fatalf("Missing ENV %s", key)
+	}
+	return s
 }
 
 func main() {
 	flag.Parse()
 
-	github_token := os.Getenv("GITHUB_TOKEN")
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	awsSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	githubToken = mustGetEnv("GITHUB_ACCESS_TOKEN")
+	awsAccessKey := mustGetEnv("AWS_ACCESS_KEY_ID")
+	awsSecretKey := mustGetEnv("AWS_SECRET_ACCESS_KEY")
 
 	t := &oauth.Transport{
-		Token: &oauth.Token{AccessToken: github_token},
+		Token: &oauth.Token{AccessToken: githubToken},
 	}
 	githubClient = github.NewClient(t.Client())
 
@@ -84,10 +95,11 @@ func uploadReposForOrg(repoChan chan Repo, org string) error {
 
 		for _, repo := range repos {
 			r := Repo{
-				Date:  now,
-				Owner: *repo.Owner.Login,
-				Name:  *repo.Name,
-				URL:   *repo.SSHURL,
+				Date:     now,
+				Owner:    *repo.Owner.Login,
+				Name:     *repo.Name,
+				FullName: *repo.FullName,
+				URL:      *repo.SSHURL,
 			}
 			repoChan <- r
 		}
@@ -107,10 +119,10 @@ func worker(repoChan chan Repo, wg *sync.WaitGroup) {
 	for repo := range repoChan {
 		n, err := uploadRepositoryToS3(bucket, repo)
 		if err != nil {
-			fmt.Printf("Error while downloading %s: %s\n", repo.URL, err)
+			log.Printf("Error while downloading %s: %s", repo.URL, err)
 		}
 		if n != 0 {
-			fmt.Printf("Successfully uploaded %s (%d bytes)\n", repo.URL, n)
+			log.Printf("Successfully uploaded %s (%d bytes)", repo.URL, n)
 		}
 	}
 }
@@ -122,8 +134,8 @@ func uploadRepositoryToS3(bucket *s3gof3r.Bucket, repo Repo) (int64, error) {
 	}
 	defer cleanup(tmp)
 
-	cloneDirectory := fmt.Sprintf("%s-%s-%s", repo.Owner, repo.Name, repo.Date)
-	err = cloneRepo(tmp, repo.URL, cloneDirectory)
+	cloneDirectory := fmt.Sprintf("%s-%s-%s", repo.Date, repo.Owner, repo.Name)
+	err = cloneRepo(tmp, cloneDirectory, repo)
 	if err != nil {
 		return 0, err
 	}
@@ -134,13 +146,16 @@ func uploadRepositoryToS3(bucket *s3gof3r.Bucket, repo Repo) (int64, error) {
 		return 0, err
 	}
 
-	archiveFile, err := os.Open(filepath.Join(tmp, archive))
+	archivePath := filepath.Join(tmp, archive)
+	sum := fileMD5(archivePath)
+
+	archiveFile, err := os.Open(archivePath)
 	if err != nil {
 		return 0, err
 	}
 	defer archiveFile.Close()
 
-	s3Key := fmt.Sprintf("%s/%s/%s-%s.tar.gz", repo.Date, repo.Owner, repo.Name, repo.Date)
+	s3Key := fmt.Sprintf("%s/%s/%s/%s-%s.tar.gz", repo.Owner, repo.Name, repo.Date, repo.Name, sum)
 	w, err := bucket.PutWriter(s3Key, nil, nil)
 	if err != nil {
 		return 0, err
@@ -158,8 +173,20 @@ func uploadRepositoryToS3(bucket *s3gof3r.Bucket, repo Repo) (int64, error) {
 	return n, nil
 }
 
-func cloneRepo(cmdDir, repoURL, directory string) error {
-	cmd := exec.Command("git", "clone", repoURL, directory)
+type md5sum string
+
+func fileMD5(file string) md5sum {
+	b, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Println(file, err)
+	}
+
+	sum := md5.Sum(b)
+	return md5sum(fmt.Sprintf("%x", sum))
+}
+
+func cloneRepo(cmdDir, directory string, r Repo) error {
+	cmd := exec.Command("git", "clone", httpsRepoWithCredential(r.FullName, githubToken), directory)
 	cmd.Dir = cmdDir
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
@@ -169,6 +196,10 @@ func cloneRepo(cmdDir, repoURL, directory string) error {
 		return err
 	}
 	return nil
+}
+
+func httpsRepoWithCredential(fullName, token string) string {
+	return fmt.Sprintf("https://token:%s@github.com/%s.git", token, fullName)
 }
 
 func archiveRepo(cmdDir, archiveFile, directory string) error {
