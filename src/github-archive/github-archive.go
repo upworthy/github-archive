@@ -193,16 +193,25 @@ func randomSleep(max int) {
 	time.Sleep(delay * time.Millisecond)
 }
 
-func cloneRepo(cmdDir, directory string, r Repo) error {
+func runCloneCmd(cmdDir, directory string, r Repo) error {
 	cmd := exec.Command("git", "clone", httpsRepoWithCredential(r.FullName, githubToken), directory)
 	cmd.Dir = cmdDir
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	randomSleep(50)
 	err := cmd.Run()
+	return err
+}
+
+func cloneRepo(cmdDir, directory string, r Repo) error {
+	randomSleep(50)
+	err := runCloneCmd(cmdDir, directory, r)
 	if err != nil {
-		return err
+		randomSleep(50)
+		err := runCloneCmd(cmdDir, directory, r)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
