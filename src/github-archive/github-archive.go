@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,9 +50,19 @@ func mustGetEnv(key string) string {
 func main() {
 	flag.Parse()
 
+	var err error
+	var goWorkers int
 	githubToken = mustGetEnv("GITHUB_ACCESS_TOKEN")
 	awsAccessKey := mustGetEnv("AWS_ACCESS_KEY_ID")
 	awsSecretKey := mustGetEnv("AWS_SECRET_ACCESS_KEY")
+	goWorkers, err = strconv.Atoi(os.Getenv("GO_WORKERS"))
+	if err != nil {
+		log.Fatal("Cannot parse GO_WORKERS ENV variable into int.")
+	}
+
+	if goWorkers == 0 {
+		goWorkers = 50
+	}
 
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: githubToken},
@@ -70,12 +81,12 @@ func main() {
 	repoChan := make(chan Repo)
 
 	wg := new(sync.WaitGroup)
-	for i := 0; i < 50; i++ {
+	for i := 0; i < goWorkers; i++ {
 		wg.Add(1)
 		go worker(repoChan, wg)
 	}
 
-	err := uploadReposForOrg(repoChan, *org)
+	err = uploadReposForOrg(repoChan, *org)
 	if err != nil {
 		log.Fatal(err)
 	}
