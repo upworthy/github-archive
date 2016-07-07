@@ -12,5 +12,5 @@ $ export AWS_SECRET_ACCESS_KEY=...
 $ export GITHUB_ORG=github
 $ export S3_BUCKET=base-bucket/subdirectory
 $ make build
-$ ./bin/github-archive --org $GITHUB_ORG --bucket S3_BUCKET
+$ ./bin/github-archive -org $GITHUB_ORG -bucket S3_BUCKET
 ```
