@@ -3,7 +3,7 @@ github-archive
 
 An easy way to archive an entire organisation repos on S3
 
-## Usage
+## Usage github-archive
 
 ```
 $ export GITHUB_ACCESS_TOKEN=...
@@ -13,4 +13,13 @@ $ export GITHUB_ORG=github
 $ export S3_BUCKET=base-bucket/subdirectory
 $ make build
 $ ./bin/github-archive -org $GITHUB_ORG -bucket S3_BUCKET
+```
+
+## Usage mongo-archiver
+Add mongo-tools buildpack, required.
+
+heroku buildpacks:add -a <DYNO> https://github.com/zph/heroku-buildpack-mongotools
+
+```
+./bin/mongo-archiver ...args
 ```
