@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"github.com/rlmcpherson/s3gof3r"
@@ -64,7 +65,21 @@ func createBackup() error {
 	return nil
 }
 
-func main() {
+func pseudo_uuid() (uuid string) {
+	// Credit: http://stackoverflow.com/a/25736155
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+
+	return
+}
+
+func setupFlags() {
 	flag.Parse()
 	flags := []string{"bucket", "mongodump", "db", "username", "password", "host"}
 	fatal := false
@@ -79,7 +94,9 @@ func main() {
 	if fatal {
 		log.Fatal("Exiting because of missing flags.")
 	}
+}
 
+func setupS3() *s3gof3r.Bucket {
 	awsAccessKey := mustGetEnv("AWS_ACCESS_KEY_ID")
 	awsSecretKey := mustGetEnv("AWS_SECRET_ACCESS_KEY")
 	keys := s3gof3r.Keys{
@@ -87,29 +104,40 @@ func main() {
 		SecretKey: awsSecretKey,
 	}
 	s3 := s3gof3r.New("", keys)
-	bucket = s3.Bucket(*bucketName)
+	return s3.Bucket(*bucketName)
+}
 
-	go createBackup()
-
-	now := time.Now().Format("2006-01-02")
+func generateS3Key() string {
+	now := time.Now().Format("2006-01-02/15")
 	prefix := ""
 	if *keyPrefix != "" {
 		prefix = *keyPrefix + "/"
 	}
-	s3Key := fmt.Sprintf("%s%s/%s/%s.tar.gz", prefix, *db, now, *db)
+	uuid := pseudo_uuid()
+	return fmt.Sprintf("%s%s/%s/%s.tar.gz", prefix, *db, now, uuid)
+}
+
+func main() {
+	setupFlags()
+	bucket := setupS3()
+
+	go createBackup()
+
+	s3Key := generateS3Key()
+	output := fmt.Sprintf("s3://%s/%s", *bucketName, s3Key)
 	w, err := bucket.PutWriter(s3Key, nil, nil)
 	if err != nil {
 		log.Fatalf("Error with bucket (%s/%s) PutWriter: %s", *bucketName, s3Key, err)
 	}
 	defer func() {
 		w.Close()
-		log.Printf("Successfully uploaded s3://%s/%s", *bucketName, s3Key)
+		log.Printf("Successfully uploaded %s", output)
 	}()
 
-	log.Printf("Uploading to s3://%s/%s", *bucketName, s3Key)
+	log.Printf("Uploading to %s", output)
 	written, err := io.Copy(w, pReader)
 	if err != nil {
-		log.Printf("Error Uploading to s3://%s/%s, ERROR: %s", *bucketName, s3Key, err)
+		log.Printf("Error Uploading to %s, ERROR: %s", output, err)
 	}
 
 	wg.Wait()
