@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"crypto/md5"
+
 	"github.com/google/go-github/github"
 	"github.com/rlmcpherson/s3gof3r"
 	"golang.org/x/oauth2"
@@ -98,11 +100,12 @@ func main() {
 func uploadReposForOrg(repoChan chan Repo, org string) error {
 	now := time.Now().Format("20060102150405")
 
+	ctx := context.Background()
 	opt := &github.RepositoryListByOrgOptions{
 		ListOptions: github.ListOptions{PerPage: 30},
 	}
 	for {
-		repos, resp, err := gh.Repositories.ListByOrg(org, opt)
+		repos, resp, err := gh.Repositories.ListByOrg(ctx, org, opt)
 		if err != nil {
 			return err
 		}

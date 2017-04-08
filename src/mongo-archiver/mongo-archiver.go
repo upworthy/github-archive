@@ -13,16 +13,14 @@ import (
 	"time"
 
 	"github.com/rlmcpherson/s3gof3r"
+	"gopkg.in/mgo.v2"
 )
 
 var (
 	bucketName        = flag.String("bucket", "", "Upload bucket")
 	keyPrefix         = flag.String("prefix", "", "S3 key prefix, eg bucket/prefix/output")
 	mongodump         = flag.String("mongodump", "mongodump", "Mongodump bin name")
-	db                = flag.String("db", "", "db name")
-	username          = flag.String("username", "", "user name")
-	password          = flag.String("password", "", "password")
-	host              = flag.String("host", "", "host:port")
+	mongoUrl          = flag.String("mongo-url", "", "Mongo connection url mongodb://user:pass@host:port/dbname. Will be parsed by mgo.ParseUrl")
 	excludeCollection = flag.String("excludeCollection", "", "collections to exclude")
 	mongoFlags        = flag.String("mongo-flags", "", "Additional flags for mongo such as --ssl")
 	pReader, pWriter  = io.Pipe()
@@ -41,7 +39,7 @@ func mustGetEnv(key string) string {
 	return s
 }
 
-func createBackup() error {
+func createBackup(dialInfo *mgo.DialInfo) error {
 	defer pWriter.Close()
 	defer wg.Done()
 	wg.Add(1)
@@ -49,7 +47,17 @@ func createBackup() error {
 	if err != nil {
 		log.Fatalf("Mongodump cannot be found on path")
 	}
-	args := []string{"--archive", "--gzip", "--db=" + *db, "--username=" + *username, "--password=" + *password, "--host=" + *host}
+	db := &dialInfo.Database
+	username := &dialInfo.Username
+	password := &dialInfo.Password
+	host := strings.Join(dialInfo.Addrs, ",")
+	args := []string{
+		"--archive",
+		"--gzip",
+		"--db=" + *db,
+		"--username=" + *username,
+		"--password=" + *password,
+		"--host=" + host}
 	flags := strings.Split(*mongoFlags, " ")
 	args = append(flags, args...)
 	// TODO: test for newness of mongo Archive requires newish >= 3.1 version of mongodump
@@ -86,7 +94,7 @@ func pseudo_uuid() (uuid string) {
 
 func setupFlags() {
 	flag.Parse()
-	flags := []string{"bucket", "mongodump", "db", "username", "password", "host"}
+	flags := []string{"bucket", "mongodump", "mongo-url"}
 	fatal := false
 	for _, f := range flags {
 		fl := flag.Lookup(f)
@@ -112,7 +120,7 @@ func setupS3() *s3gof3r.Bucket {
 	return s3.Bucket(*bucketName)
 }
 
-func generateS3Key() string {
+func generateS3Key(db *string) string {
 	now := time.Now().Format("2006-01-02/15")
 	prefix := ""
 	if *keyPrefix != "" {
@@ -125,10 +133,14 @@ func generateS3Key() string {
 func main() {
 	setupFlags()
 	bucket := setupS3()
+	dialInfo, err := mgo.ParseURL(*mongoUrl)
+	if err != nil {
+		panic("Unable to parse mongo uri")
+	}
 
-	go createBackup()
+	go createBackup(dialInfo)
 
-	s3Key := generateS3Key()
+	s3Key := generateS3Key(&dialInfo.Database)
 	output := fmt.Sprintf("s3://%s/%s", *bucketName, s3Key)
 	w, err := bucket.PutWriter(s3Key, nil, nil)
 	if err != nil {
