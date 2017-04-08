@@ -1,0 +1,9 @@
+package: github.com/zph/github-archive
+import:
+- package: github.com/google/go-github
+  subpackages:
+  - github
+- package: github.com/rlmcpherson/s3gof3r
+  version: ^0.5.0
+- package: golang.org/x/oauth2
+- package: gopkg.in/mgo.v2
