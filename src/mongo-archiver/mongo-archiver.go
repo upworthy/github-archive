@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
-	"github.com/rlmcpherson/s3gof3r"
 	"io"
 	"log"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rlmcpherson/s3gof3r"
 )
 
 var (
@@ -23,6 +24,7 @@ var (
 	password          = flag.String("password", "", "password")
 	host              = flag.String("host", "", "host:port")
 	excludeCollection = flag.String("excludeCollection", "", "collections to exclude")
+	mongoFlags        = flag.String("mongo-flags", "", "Additional flags for mongo such as --ssl")
 	pReader, pWriter  = io.Pipe()
 
 	wg sync.WaitGroup
@@ -47,13 +49,16 @@ func createBackup() error {
 	if err != nil {
 		log.Fatalf("Mongodump cannot be found on path")
 	}
+	args := []string{"--archive", "--gzip", "--db=" + *db, "--username=" + *username, "--password=" + *password, "--host=" + *host}
+	flags := strings.Split(*mongoFlags, " ")
+	args = append(flags, args...)
 	// TODO: test for newness of mongo Archive requires newish >= 3.1 version of mongodump
 	// 3.0.5 in homebrew is missing --archive
 	// 3.2 is where archive to STDOUT became available
 	if *excludeCollection != "" {
 		*excludeCollection = "--excludeCollection=" + *excludeCollection
+		args = append(args, *excludeCollection)
 	}
-	args := []string{"--archive", "--db=" + *db, "--username=" + *username, "--password=" + *password, "--host=" + *host, *excludeCollection, "--gzip"}
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = pWriter
 	cmd.Stderr = os.Stderr
