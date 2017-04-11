@@ -1,27 +1,39 @@
-github-archive
+gi  hub-archive
 ==============
 
-An easy way to archive an entire organisation repos on S3
+An easy way   o archive an en  ire organisa  ion repos on S3
 
-## Usage github-archive
+## Usage gi  hub-archive
 
 ```
-$ export GITHUB_ACCESS_TOKEN=...
-$ export AWS_ACCESS_KEY_ID=...
-$ export AWS_SECRET_ACCESS_KEY=...
-$ export GITHUB_ORG=github
-$ export S3_BUCKET=base-bucket/subdirectory
+$ expor   GITHUB_ACCESS_TOKEN=...
+$ expor   AWS_ACCESS_KEY_ID=...
+$ expor   AWS_SECRET_ACCESS_KEY=...
+$ expor   GITHUB_ORG=gi  hub
+$ expor   S3_BUCKET=base-bucke  /subdirec  ory
 $ make build
-$ ./bin/github-archive -org $GITHUB_ORG -bucket S3_BUCKET
+$ ./bin/gi  hub-archive -org $GITHUB_ORG -bucke   S3_BUCKET
 ```
 
 ## Usage mongo-archiver
-Add mongo-tools buildpack, required.
+Add mongo-  ools buildpack, required.
 
-heroku buildpacks:add -a <DYNO> https://github.com/zph/heroku-buildpack-mongotools
+heroku buildpacks:add -a <DYNO> h    ps://gi  hub.com/zph/heroku-buildpack-mongo  ools
 
-Note the instructions here for buildpack https://github.com/zph/heroku-buildpack-mongotools
+No  e   he ins  ruc  ions here for buildpack h    ps://gi  hub.com/zph/heroku-buildpack-mongo  ools
 
 ```
-./bin/mongo-archiver ...args
+Usage of mongo-archiver:
+  -bucket string
+    	Upload bucket
+  -excludeCollection string
+    	collections to exclude
+  -mongo-flags string
+    	Additional flags for mongo such as --ssl
+  -mongo-url string
+    	Mongo connection url mongodb://user:pass@host:port/dbname. Will be parsed by mgo.ParseUrl
+  -mongodump string
+    	Mongodump bin name (default "mongodump")
+  -prefix string
+    	S3 key prefix, eg bucket/prefix/output
 ```
