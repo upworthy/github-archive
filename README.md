@@ -20,6 +20,8 @@ Add mongo-tools buildpack, required.
 
 heroku buildpacks:add -a <DYNO> https://github.com/zph/heroku-buildpack-mongotools
 
+Note the instructions here for buildpack https://github.com/zph/heroku-buildpack-mongotools
+
 ```
 ./bin/mongo-archiver ...args
 ```
